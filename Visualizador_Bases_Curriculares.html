@@ -165,7 +165,7 @@ footer{text-align:center;padding:20px;font-size:10px;font-family:'IBM Plex Mono'
     <div class="htxt">
       <div class="hinst">Centro de Estudios · Ministerio de Educación · Chile · 2025</div>
       <h1>Docentes por <em>Asignatura y Grado</em><br>Historia · Lenguaje · Matemática · Ed. Ciudadana</h1>
-      <div class="hsub">Fuente: Docentes por curso y subsector 2025 (SIGE) · 1° Básico a 4° Medio · Según Bases Curriculares: Filtro estricto por grado × asignatura</div>
+      <div class="hsub">Fuente: Docentes por curso y subsector 2025 (SIGE) · 1° Básico a 4° Medio · Filtro estricto por grado × asignatura</div>
     </div>
     <div class="kpi-strip">
       <div class="kpi"><div class="kval" id="k-doc">—</div><div class="klbl">Docentes</div></div>
@@ -188,8 +188,17 @@ footer{text-align:center;padding:20px;font-size:10px;font-family:'IBM Plex Mono'
       <select id="f-com"><option value="">Todas las comunas</option></select></div>
     <div class="fg"><label>Dependencia administrativa</label>
       <select id="f-tip"><option value="">Todas</option></select></div>
-    <div class="fg"><label>Grado</label>
-      <select id="f-gra"><option value="">Todos los grados</option></select></div>
+    <div class="fg fg-multi">
+      <label>Grado</label>
+      <div class="multi-trigger" id="gra-trigger" onclick="toggleGraPanel()">
+        <span id="gra-trigger-label">Todos los grados</span>
+        <span class="trigger-arrow" id="gra-arrow">▾</span>
+      </div>
+      <div class="multi-wrap" id="multi-gra-wrap">
+        <div class="multi-list" id="gra-list"></div>
+        <div class="multi-footer" id="gra-footer">Todos los grados</div>
+      </div>
+    </div>
     <div class="fg fg-multi">
       <label>Asignatura</label>
       <div class="multi-trigger" id="asi-trigger" onclick="toggleAsiPanel()">
@@ -332,9 +341,58 @@ function pop(id,items){
   items.forEach((v,i)=>{const o=document.createElement('option');o.value=i;o.textContent=v;el.appendChild(o);});
 }
 pop('f-reg',dreg);pop('f-com',dcom);pop('f-tip',dtip);
-pop('f-gra',dgra);pop('f-zon',dzon);pop('f-gen',dgen);
+pop('f-zon',dzon);pop('f-gen',dgen);
 pop('f-age',dte);pop('f-sec',dsec);
-['f-reg','f-com','f-tip','f-gra','f-zon','f-gen','f-age','f-sec'].forEach(id=>
+
+// Multi-select grado
+let selectedGra=new Set();
+function buildGraList(){
+  const list=document.getElementById('gra-list');
+  list.innerHTML='';
+  dgra.forEach((name,i)=>{
+    const div=document.createElement('div');
+    div.className='multi-item'+(selectedGra.has(i)?' selected':'');
+    div.innerHTML='<input type="checkbox"'+(selectedGra.has(i)?' checked':'')+'><span>'+name+'</span>';
+    div.addEventListener('click',()=>{
+      if(selectedGra.has(i)) selectedGra.delete(i); else selectedGra.add(i);
+      updateGraFooter(); update(); buildGraList();
+    });
+    list.appendChild(div);
+  });
+}
+function updateGraFooter(){
+  const el=document.getElementById('gra-footer');
+  const lbl=document.getElementById('gra-trigger-label');
+  if(selectedGra.size===0){
+    el.textContent='Todos los grados';lbl.textContent='Todos los grados';lbl.classList.remove('active');
+  } else if(selectedGra.size===1){
+    const name=dgra[[...selectedGra][0]];
+    el.textContent=name;lbl.textContent=name;lbl.classList.add('active');
+  } else {
+    el.textContent=selectedGra.size+' grados';
+    lbl.textContent=selectedGra.size+' grados seleccionados';lbl.classList.add('active');
+  }
+}
+function clearGrado(){selectedGra.clear();updateGraFooter();buildGraList();update();}
+function toggleGraPanel(){
+  const wrap=document.getElementById('multi-gra-wrap');
+  const trigger=document.getElementById('gra-trigger');
+  const arrow=document.getElementById('gra-arrow');
+  const isOpen=wrap.style.display!=='none'&&wrap.style.display!=='';
+  wrap.style.display=isOpen?'none':'block';
+  trigger.classList.toggle('open',!isOpen);arrow.classList.toggle('open',!isOpen);
+}
+// Cerrar grado al clic fuera
+document.addEventListener('click',function(e){
+  const wrap=document.getElementById('multi-gra-wrap');
+  const trigger=document.getElementById('gra-trigger');
+  if(wrap&&trigger&&!wrap.contains(e.target)&&!trigger.contains(e.target)){
+    wrap.style.display='none';trigger.classList.remove('open');
+    document.getElementById('gra-arrow').classList.remove('open');
+  }
+});
+buildGraList();
+['f-reg','f-com','f-tip','f-zon','f-gen','f-age','f-sec'].forEach(id=>
   document.getElementById(id).addEventListener('change',update));
 
 // Multi-select asignatura
@@ -389,24 +447,26 @@ buildAsiList();
 
 function getF(){
   const v=id=>{const el=document.getElementById(id);return el.value===''?null:+el.value;};
-  return{r:v('f-reg'),c:v('f-com'),t:v('f-tip'),g:v('f-gra'),
+  return{r:v('f-reg'),c:v('f-com'),t:v('f-tip'),
+         g:selectedGra.size>0?selectedGra:null,
          a:selectedAsi.size>0?selectedAsi:null,
          sec:v('f-sec'),z:v('f-zon'),ge:v('f-gen'),te:v('f-age')};
 }
 function filterRecs(f){
   return RECS.filter(d=>(f.r===null||d.r===f.r)&&(f.c===null||d.c===f.c)&&
-    (f.t===null||d.t===f.t)&&(f.g===null||d.g===f.g)&&
+    (f.t===null||d.t===f.t)&&(f.g===null||f.g.has(d.g))&&
     (f.a===null||f.a.has(d.a))&&(f.sec===null||d.sec===f.sec)&&(f.z===null||d.z===f.z));
 }
 function filterDocs(f){
   return DOCS.filter(d=>(f.r===null||d.r===f.r)&&(f.c===null||d.c===f.c)&&
-    (f.t===null||d.t===f.t)&&(f.g===null||d.g===f.g)&&
+    (f.t===null||d.t===f.t)&&(f.g===null||f.g.has(d.g))&&
     (f.a===null||f.a.has(d.a))&&(f.sec===null||d.sec===f.sec)&&
     (f.z===null||d.z===f.z)&&(f.ge===null||d.ge===f.ge)&&(f.te===null||d.te===f.te));
 }
 function resetFilters(){
-  ['f-reg','f-com','f-tip','f-gra','f-zon','f-gen','f-age','f-sec'].forEach(id=>
+  ['f-reg','f-com','f-tip','f-zon','f-gen','f-age','f-sec'].forEach(id=>
     document.getElementById(id).value='');
+  clearGrado();
   clearAsignatura();
 }
 
